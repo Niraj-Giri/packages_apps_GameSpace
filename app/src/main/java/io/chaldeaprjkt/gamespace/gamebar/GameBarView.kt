@@ -60,9 +60,9 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import com.android.compose.animation.scene.SceneTransitionLayout
-import com.android.compose.animation.scene.SwipeDetector
-import com.android.compose.animation.scene.rememberMutableSceneTransitionLayoutState
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import io.chaldeaprjkt.gamespace.R
 
 private const val PILL_WIDTH_DP = 36
@@ -94,17 +94,6 @@ fun GameBarView(
     onDragUpdate: (Int, Int) -> Unit,
     onDragEnd: (Int, Int) -> Unit,
 ) {
-    val state = rememberMutableSceneTransitionLayoutState(
-        initialScene = GameBarScenes.Pill,
-        transitions = GameBarTransitions,
-    )
-    val scope = rememberCoroutineScope()
-    val noSwipe = remember {
-        object : SwipeDetector {
-            override fun detectSwipe(change: PointerInputChange) = false
-        }
-    }
-
     val animatedPillAlpha by animateFloatAsState(
         targetValue = if (isIdle) idleAlpha else 1f,
         label = "pillAlpha",
@@ -112,7 +101,6 @@ fun GameBarView(
 
     LaunchedEffect(collapseRequestKey) {
         if (collapseRequestKey > 0) {
-            state.setTargetScene(GameBarScenes.Pill, scope)
             onCollapsed()
         }
     }
@@ -161,7 +149,6 @@ fun GameBarView(
                     } else {
                         val inward = if (dockedOnLeft) accDragX else -accDragX
                         if (inward > swipeThresholdPx && abs(accDragX) > abs(accDragY)) {
-                            state.setTargetScene(GameBarScenes.VerticalPill, scope)
                             onExpanded()
                         } else {
                             onDragEnd(startWindowX, startWindowY)
@@ -178,25 +165,21 @@ fun GameBarView(
     val barTopDp = with(density) { barTopPx.toDp() }
 
     val sceneContent = @Composable {
-        SceneTransitionLayout(
-            state = state,
-            swipeDetector = noSwipe,
-        ) {
-            scene(GameBarScenes.Pill) {
+        Crossfade(
+            targetState = pillExpanded,
+            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+            label = "GameBarTransition"
+        ) { isExpanded ->
+            if (!isExpanded) {
                 PillTab(
                     dockedOnLeft = dockedOnLeft,
                     showFps = showFps,
                     fpsText = fpsText,
                     idleAlpha = animatedPillAlpha,
                     pointerModifier = pointerModifier,
-                    onTap = {
-                        state.setTargetScene(GameBarScenes.VerticalPill, scope)
-                        onExpanded()
-                    },
-                    modifier = Modifier.element(GameBarElements.PillContent),
+                    onTap = onExpanded,
                 )
-            }
-            scene(GameBarScenes.VerticalPill) {
+            } else {
                 VerticalPill(
                     isLocked = isLocked,
                     mapperEnabled = mapperEnabled,
@@ -206,7 +189,6 @@ fun GameBarView(
                     onShowPanel = onShowPanel,
                     onToggleLock = onToggleLock,
                     onMapControls = onMapControls,
-                    modifier = Modifier.element(GameBarElements.VerticalPillContent),
                 )
             }
         }
@@ -222,7 +204,6 @@ fun GameBarView(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                     ) {
-                        state.setTargetScene(GameBarScenes.Pill, scope)
                         onCollapsed()
                     },
             )
